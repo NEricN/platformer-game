@@ -114,16 +114,146 @@ var PhysicsManager = {
     }
 
   , initTestMap: function() {
-        this.createBox(9, 13, 50, 1, {isStatic: true});
-        for(var i = 0; i < 100; ++i) {
+        this.createBox(25, 20, 50, 1, {isStatic: true});
+        this.createBox(1, 10, 1, 20, {isStatic: true});
+        this.createBox(25, 10, 1, 20, {isStatic: true});
+        for(var i = 0; i < 20; ++i) {
             if(Math.random() > 0.5) {
-                this.createBox(Math.random()*10, Math.random()*10, Math.random()+0.1, Math.random() + 0.1);
+                this.createBox(Math.random()*10 + 2, Math.random()*10 + 2, Math.random()+0.1, Math.random() + 0.1);
             } else {
-                this.createCircle(Math.random()*10, Math.random()*10, Math.random()+0.1);
+                this.createCircle(Math.random()*10 + 2, Math.random()*10 + 2, Math.random()+0.1);
             }
         }
     }
 };
+
+var KeyManager = {
+    init: function(player) {
+        this.player = player;
+
+        this.listener = new window.keypress.Listener();
+
+        this.loadGameControls();
+    }
+
+  , loadGameControls: function() {
+        this.listener.reset();
+
+        this.listener.register_many([
+            {
+                "keys"          : "w",
+                "is_exclusive"  : false,
+                "prevent_repeat": true,
+                "on_keydown"    : function() {
+                    console.log("Jumping");
+                    this.player.jump();
+                },
+                "on_keyup"      : function(e) {
+                    // console.log("And now you've released w");
+                },
+                "this"          : this
+            },
+            {
+                "keys"          : "d",
+                "is_exclusive"  : false,
+                "prevent_repeat": false,
+                 "on_keydown"    : function() {
+                    console.log("Movin' right");
+                    this.player.moveRight();
+                },
+                "on_keyup"      : function(e) {
+                    // console.log("And now you've released w");
+                    this.player.stopMovement();
+                },
+                "this"          : this
+            },
+            {
+                "keys"          : "a",
+                "is_exclusive"  : false,
+                "prevent_repeat": false,
+                 "on_keydown"    : function() {
+                    console.log("Moving left");
+                    this.player.moveLeft();
+                },
+                "on_keyup"      : function(e) {
+                    // console.log("And now you've released w");
+                    this.player.stopMovement();
+                },
+                "this"          : this
+            }
+        ]);
+    }
+}
+
+var Player = function() {
+    this.physicsObject = PhysicsManager.createBox(10, 10, 1, 1);
+    this.physicsObject.m_body.SetFixedRotation(true);
+    this.canJump = false;
+    this.recentlyJumped = false;
+}
+
+Player.prototype.move = function() {
+    var vel = this.physicsObject.m_body.GetLinearVelocity().y;
+    PhysicsManager.setObjectVelocity(this.physicsObject, new PhysicsManager.b2Vec2(this.xSpeed, vel));
+}
+
+Player.prototype.moveLeft = function() {
+    this.xSpeed = -5;
+}
+
+Player.prototype.moveRight = function() {
+    this.xSpeed = 5;
+}
+
+Player.prototype.stopMovement = function() {
+    this.xSpeed = 0;
+}
+
+Player.prototype.downwardRaycast = function() {
+    var self = this;
+
+    //var worldPoint = this.physicsObject.m_body.GetWorldPoint(new PhysicsManager.b2Vec2(0,1));
+
+    //make the ray at least as long as the target distance
+    var startOfRay = this.physicsObject.m_body.GetPosition();//new PhysicsManager.b2Vec2(this.physicsObject.m_body.GetPosition());
+    var worldPoint = startOfRay.Copy();
+        worldPoint.Add(new PhysicsManager.b2Vec2(0,1));
+    var endOfRay = worldPoint; //new PhysicsManager.b2Vec2(worldPoint);
+
+    // console.log(startOfRay);
+    // console.log(endOfRay);
+
+    var callb = function(fixture, point, normal, fraction) {
+// you can, for instance, check if fixture belongs to the ground
+// or something else, then handle things accordingly
+        console.log(fraction);
+        if(fraction < 1) {
+            self.canJump = true;
+            self.jumpBypass();
+        }
+    }
+
+    PhysicsManager.world.RayCast(callb, startOfRay, endOfRay);
+}
+
+Player.prototype.jump = function() {
+    var self = this;
+    this.downwardRaycast();
+}
+
+Player.prototype.jumpBypass = function() {
+    // console.log("Attempt!");
+    if(this.canJump && !this.recentlyJumped) {
+        PhysicsManager.applyImpulseOnObject(this.physicsObject, new PhysicsManager.b2Vec2(0, -10));
+        this.canJump = false;
+        this.recentlyJumped = true;
+
+        var self = this;
+        setTimeout(function() {
+            self.recentlyJumped = false;
+        }, 200);
+    }
+}
 
 var init = function() {
     var start = null;
@@ -133,6 +263,7 @@ var init = function() {
     function step(timestamp) {
         canvasContext.clearRect(0, 0, canvas.width, canvas.height);
         try {
+            player.move();
             PhysicsManager.step(timestamp - start);
         }
         catch(err) {
@@ -143,6 +274,10 @@ var init = function() {
     }
 
     PhysicsManager.init({context: canvasContext, isDebug: true, canvas: canvas});
+
+    player = new Player();
+
+    keyManager = KeyManager.init(player);
 
     window.requestAnimationFrame(step);
 }
