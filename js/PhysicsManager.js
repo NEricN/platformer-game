@@ -18,7 +18,29 @@ var PhysicsManager = {
   , renderScale: 1.0
 
   , initCollisionListeners: function() {
+        var listener = new Box2D.Dynamics.b2ContactListener;
+        listener.BeginContact = function(contact) {
+            var a = contact.GetFixtureA().GetBody().parentObject(),
+                b = contact.GetFixtureB().GetBody().parentObject();
+            a.reactBegin(b);
+            b.reactBegin(a);
+        }
+        listener.EndContact = function(contact) {
+            var a = contact.GetFixtureA().GetBody().parentObject(),
+                b = contact.GetFixtureB().GetBody().parentObject();
+            a.reactEnd(b);
+            b.reactEnd(a);
+        }
+        listener.PostSolve = function(contact, impulse) {
+            var a = contact.GetFixtureA().GetBody().parentObject(),
+                b = contact.GetFixtureB().GetBody().parentObject();
+            a.reactPost(b, impulse);
+            b.reactPost(a, impulse);
+        }
+        listener.PreSolve = function(contact, oldManifold) {
 
+        }
+        this.world.SetContactListener(listener);
     }
 
   , applyImpulseOnObject: function(obj, imp) {
@@ -39,16 +61,20 @@ var PhysicsManager = {
     }
 
   , renderDebugData: function() {
-        this.canvasContext.save();
-        this.canvasContext.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.canvasContext.translate(this.game.getPosition().x, this.game.getPosition().y);
+        this.game.canvasContext.save();
+        this.game.canvasContext.clearRect(0, 0, this.game.width, this.game.height);
+        this.game.canvasContext.translate(this.game.getPosition().x, this.game.getPosition().y);
+        if(this.game.canvasChanged) { //TODO: decouple this part
+          this.setDebugDraw(this.game.canvasContext);
+          this.game.canvasChanged = false;
+        }
         this.world.DrawDebugData();
-        this.canvasContext.restore();
+        this.game.canvasContext.restore();
     }
 
   , setDebugDraw: function(canvasContext) {
         this.isDebugDraw = true;
-        this.canvasContext = canvasContext;
+        //this.canvasContext = canvasContext;
         debugDraw = new this.b2DebugDraw();
         debugDraw.SetSprite(canvasContext);
         debugDraw.SetDrawScale(30.0);
@@ -67,14 +93,11 @@ var PhysicsManager = {
         properties = properties||{};
 
         bodyDef.type = properties.isStatic ? this.b2Body.b2_staticBody : this.b2Body.b2_dynamicBody;
-
-        console.log("Friction : "  + properties.friction);
+        bodyDef.isBullet = properties.isBullet||false;
 
         fixDef.density = typeof properties.density !== "undefined" ? properties.density : 1.0;
         fixDef.friction = typeof properties.friction !== "undefined" ? properties.friction : 0.5;
         fixDef.restitution = typeof properties.restitution !== "undefined" ? properties.restitution : 0.2;
-
-        console.log(fixDef.friction);
 
         //specific
         fixDef.shape = new this.b2PolygonShape();
@@ -96,6 +119,7 @@ var PhysicsManager = {
         properties = properties||{};
 
         bodyDef.type = properties.isStatic ? this.b2Body.b2_staticBody : this.b2Body.b2_dynamicBody;
+        bodyDef.isBullet = properties.isBullet||false;
 
         fixDef.density = typeof properties.density !== "undefined" ? properties.density : 1.0;
         fixDef.friction = typeof properties.friction !== "undefined" ? properties.friction : 0.5;
@@ -118,7 +142,6 @@ var PhysicsManager = {
         this.world = new this.b2World(this.gravity);
         this.renderScale = properties.game.renderScale;
 
-        this.canvas = properties.canvas;
         this.game = properties.game;
 
         if(properties.isDebug) {
